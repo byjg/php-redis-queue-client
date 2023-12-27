@@ -1,0 +1,21 @@
+{
+  "name": "byjg/redis-queue-client",
+  "description": "A minimal redis queue client using the components of byjg/message-queue-client",
+  "autoload": {
+    "psr-4": {
+      "ByJG\\MessageQueueClient\\RedisQueue\\": "src/"
+    }
+  },
+  "prefer-stable": true,
+  "minimum-stability": "dev",
+  "require": {
+    "php": ">=7.4",
+    "ext-curl": "*",
+    "ext-redis": "*",
+    "byjg/message-queue-client": "4.9.x-dev"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "5.7.*|7.4.*|^9.5"
+  },
+  "license": "MIT"
+}
