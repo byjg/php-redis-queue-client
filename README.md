@@ -75,5 +75,12 @@ Possible return values from the callback function:
 |----------|-----------------------------------------------------|----------------------------------------------------------------------------------------|
 | Redis    | redis://user:pass@host:port                         | Default port: 6379.                                                                    |
 
+## Dependencies
+
+```mermaid
+flowchart TD
+    RedisQueueClient --> MessageClient
+    RedisQueueClient --> ext-redis
+```
 ----
 [Open source ByJG](http://opensource.byjg.com)
