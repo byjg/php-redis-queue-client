@@ -79,8 +79,8 @@ Possible return values from the callback function:
 
 ```mermaid
 flowchart TD
-    RedisQueueClient --> MessageClient
-    RedisQueueClient --> ext-redis
+    byjg/redis-queue-client --> byjg/message-queue-client
+    byjg/redis-queue-client --> ext-redis
 ```
 ----
 [Open source ByJG](http://opensource.byjg.com)
