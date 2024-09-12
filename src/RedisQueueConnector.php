@@ -24,7 +24,7 @@ class RedisQueueConnector implements ConnectorInterface
     /** @var Uri */
     protected Uri $uri;
 
-    protected Redis $redis;
+    protected ?Redis $redis = null;
 
     public function setUp(Uri $uri): void
     {
@@ -35,7 +35,7 @@ class RedisQueueConnector implements ConnectorInterface
     /**
      * @throws RedisException
      */
-    protected function lazyLoadRedisServer(): void
+    protected function lazyLoadRedisServer(): Redis
     {
         $this->redis = new Redis();
         $this->redis->connect($this->uri->getHost(), empty($this->uri->getPort()) ? 6379 : $this->uri->getPort());
@@ -50,6 +50,8 @@ class RedisQueueConnector implements ConnectorInterface
         $this->redis->setOption(Redis::OPT_SERIALIZER, Redis::SERIALIZER_NONE);
 
         $this->redis->info('redis_version');
+
+        return $this->redis;
     }
 
     /**
@@ -59,7 +61,7 @@ class RedisQueueConnector implements ConnectorInterface
     public function getDriver(): Redis
     {
         if (empty($this->redis)) {
-            $this->lazyLoadRedisServer();
+            return $this->lazyLoadRedisServer();
         }
 
         return $this->redis;
