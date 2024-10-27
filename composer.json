@@ -9,7 +9,7 @@
   "prefer-stable": true,
   "minimum-stability": "dev",
   "require": {
-    "php": ">=8.1",
+    "php": ">=8.1 <8.4",
     "ext-curl": "*",
     "ext-redis": "*",
     "byjg/message-queue-client": "^5.0"
