@@ -7,27 +7,35 @@ use ByJG\MessageQueueClient\Connector\Pipe;
 use ByJG\MessageQueueClient\Envelope;
 use ByJG\MessageQueueClient\Message;
 
+use ByJG\Util\Uri;
+use Closure;
+use Error;
+use Exception;
 use Redis;
+use RedisException;
 
 class RedisQueueConnector implements ConnectorInterface
 {
-    public static function schema()
+    public static function schema(): array
     {
         return ["redis"];
     }
 
-    /** @var \ByJG\Util\Uri */
-    protected $uri;
+    /** @var Uri */
+    protected Uri $uri;
 
-    protected $redis;
+    protected ?Redis $redis = null;
 
-    public function setUp(\ByJG\Util\Uri $uri)
+    public function setUp(Uri $uri): void
     {
         $this->uri = $uri;
     }
 
 
-    protected function lazyLoadRedisServer()
+    /**
+     * @throws RedisException
+     */
+    protected function lazyLoadRedisServer(): Redis
     {
         $this->redis = new Redis();
         $this->redis->connect($this->uri->getHost(), empty($this->uri->getPort()) ? 6379 : $this->uri->getPort());
@@ -42,24 +50,30 @@ class RedisQueueConnector implements ConnectorInterface
         $this->redis->setOption(Redis::OPT_SERIALIZER, Redis::SERIALIZER_NONE);
 
         $this->redis->info('redis_version');
+
+        return $this->redis;
     }
 
     /**
      * @return Redis
+     * @throws RedisException
      */
-    public function getDriver()
+    public function getDriver(): Redis
     {
         if (empty($this->redis)) {
-            $this->lazyLoadRedisServer();
+            return $this->lazyLoadRedisServer();
         }
 
         return $this->redis;
     }
 
-    public function publish(Envelope $envelope)
+    /**
+     * @throws RedisException
+     */
+    public function publish(Envelope $envelope): void
     {
         $properties = $envelope->getMessage()->getProperties();
-        $properties['content_type'] = $properties['content_type'] ?? 'text/plain';
+        $properties['content_type'] ??= 'text/plain';
 
         $pipe = clone $envelope->getPipe();
 
@@ -69,7 +83,10 @@ class RedisQueueConnector implements ConnectorInterface
 
     }
 
-    public function consume(Pipe $pipe, \Closure $onReceive, \Closure $onError, $identification = null)
+    /**
+     * @throws RedisException
+     */
+    public function consume(Pipe $pipe, Closure $onReceive, Closure $onError, ?string $identification = null): void
     {
         $pipe = clone $pipe;
 
@@ -84,7 +101,7 @@ class RedisQueueConnector implements ConnectorInterface
 
             try {
                 $result = $onReceive($envelope);
-            } catch (\Exception|\Error $ex) {
+            } catch (Exception|Error $ex) {
                 $result = $onError($envelope, $ex);
             }
 
