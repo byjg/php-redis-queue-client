@@ -16,6 +16,7 @@ use RedisException;
 
 class RedisQueueConnector implements ConnectorInterface
 {
+    #[\Override]
     public static function schema(): array
     {
         return ["redis"];
@@ -26,6 +27,7 @@ class RedisQueueConnector implements ConnectorInterface
 
     protected ?Redis $redis = null;
 
+    #[\Override]
     public function setUp(Uri $uri): void
     {
         $this->uri = $uri;
@@ -58,6 +60,7 @@ class RedisQueueConnector implements ConnectorInterface
      * @return Redis
      * @throws RedisException
      */
+    #[\Override]
     public function getDriver(): Redis
     {
         if (empty($this->redis)) {
@@ -70,6 +73,7 @@ class RedisQueueConnector implements ConnectorInterface
     /**
      * @throws RedisException
      */
+    #[\Override]
     public function publish(Envelope $envelope): void
     {
         $properties = $envelope->getMessage()->getProperties();
@@ -86,6 +90,7 @@ class RedisQueueConnector implements ConnectorInterface
     /**
      * @throws RedisException
      */
+    #[\Override]
     public function consume(Pipe $pipe, Closure $onReceive, Closure $onError, ?string $identification = null): void
     {
         $pipe = clone $pipe;

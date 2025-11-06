@@ -14,6 +14,7 @@ class RedisQueueConnectorTest extends TestCase
     /** @var ConnectorInterface */
     protected $connector;
 
+    #[\Override]
     public function setUp(): void
     {
         $host = getenv('REDIS_HOST');
@@ -24,7 +25,7 @@ class RedisQueueConnectorTest extends TestCase
         $this->connector = ConnectorFactory::create("redis://$host");
     }
 
-    public function testClearQueues()
+    public function testClearQueues(): void
     {
         // We are not using tearDown() because we want to keep the queues for the other tests
 
@@ -36,7 +37,7 @@ class RedisQueueConnectorTest extends TestCase
         $this->assertTrue(true);
     }
 
-    public function testPublishConsume()
+    public function testPublishConsume(): void
     {
 
         $pipe = new Pipe("test");
@@ -54,7 +55,7 @@ class RedisQueueConnectorTest extends TestCase
         });
     }
 
-    public function testPublishConsumeRequeue()
+    public function testPublishConsumeRequeue(): void
     {
         $pipe = new Pipe("test");
         $message = new Message("body_requeue");
@@ -71,7 +72,7 @@ class RedisQueueConnectorTest extends TestCase
         });
     }
 
-    public function testConsumeMessageRequeued()
+    public function testConsumeMessageRequeued(): void
     {
         $pipe = new Pipe("test");
 
@@ -86,7 +87,7 @@ class RedisQueueConnectorTest extends TestCase
         });
     }
 
-    public function testPublishConsumeWithDlq()
+    public function testPublishConsumeWithDlq(): void
     {
         $pipe = new Pipe("test2");
         $dlqQueue = new Pipe("dlq_test2");

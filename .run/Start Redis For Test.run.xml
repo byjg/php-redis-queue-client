@@ -3,7 +3,12 @@
     <deployment type="docker-compose.yml">
       <settings>
         <option name="envFilePath" value="" />
-        <option name="sourceFilePath" value="docker-compose-for-test.yaml" />
+        <option name="envFilePaths">
+          <list>
+            <option value="" />
+          </list>
+        </option>
+        <option name="sourceFilePath" value="docker-compose.yaml" />
       </settings>
     </deployment>
     <method v="2" />
