@@ -6,9 +6,15 @@
 [![GitHub license](https://img.shields.io/github/license/byjg/php-redis-queue-client.svg)](https://opensource.byjg.com/opensource/licensing.html)
 [![GitHub release](https://img.shields.io/github/release/byjg/php-redis-queue-client.svg)](https://github.com/byjg/php-redis-queue-client/releases/)
 
-It creates a simple abstraction layer to publish and consume messages from the Redis using the component [byjg/message-queue-client](https://github.com/byjg/message-queue-client).
+A simple and efficient abstraction layer for publishing and consuming messages from Redis queues using the [byjg/message-queue-client](https://github.com/byjg/message-queue-client) framework.
 
-For details on how to use the Message Queue Client see the [documentation](https://github.com/byjg/message-queue-client)
+## Documentation
+
+- [Installation](docs/installation.md)
+- [Connection](docs/connection.md)
+- [Publishing Messages](docs/publishing.md)
+- [Consuming Messages](docs/consuming.md)
+- [Error Handling](docs/error-handling.md)
 
 ## Usage
 
@@ -75,18 +81,18 @@ Possible return values from the callback function:
 * `Message::REQUEUE` - Requeue the message
 * `Message::EXIT` - Exit the consume method
 
-## Protocols:
+## Protocols
 
-| Protocol | URI Example                                         | Notes                                                                                  |
-|----------|-----------------------------------------------------|----------------------------------------------------------------------------------------|
-| Redis    | redis://user:pass@host:port                         | Default port: 6379.                                                                    |
+| Protocol | URI Example                 | Notes               |
+|----------|-----------------------------|---------------------|
+| Redis    | redis://user:pass@host:port | Default port: 6379  |
 
 ## Dependencies
 
 ```mermaid
 flowchart TD
     byjg/redis-queue-client --> byjg/message-queue-client
-    byjg/redis-queue-client --> ext-redis
 ```
+
 ----
 [Open source ByJG](http://opensource.byjg.com)
