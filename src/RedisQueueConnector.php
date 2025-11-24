@@ -16,6 +16,7 @@ use RedisException;
 
 class RedisQueueConnector implements ConnectorInterface
 {
+    #[\Override]
     public static function schema(): array
     {
         return ["redis"];
@@ -26,6 +27,7 @@ class RedisQueueConnector implements ConnectorInterface
 
     protected ?Redis $redis = null;
 
+    #[\Override]
     public function setUp(Uri $uri): void
     {
         $this->uri = $uri;
@@ -38,14 +40,16 @@ class RedisQueueConnector implements ConnectorInterface
     protected function lazyLoadRedisServer(): Redis
     {
         $this->redis = new Redis();
-        $this->redis->connect($this->uri->getHost(), empty($this->uri->getPort()) ? 6379 : $this->uri->getPort());
+        $this->redis->connect($this->uri->getHost(), $this->uri->getPort() ?? 6379);
 
-        if (!empty($this->uri->getPassword())) {
-            $password = [ $this->uri->getPassword() ];
-            if (!empty($this->uri->getUsername())) {
-                $password[] = $this->uri->getUsername();
+        $password = $this->uri->getPassword();
+        if ($password !== null && $password !== '') {
+            $username = $this->uri->getUsername();
+            $authCredentials = [$password];
+            if ($username !== null && $username !== '') {
+                $authCredentials[] = $username;
             }
-            $this->redis->auth($password);
+            $this->redis->auth($authCredentials);
         }
         $this->redis->setOption(Redis::OPT_SERIALIZER, Redis::SERIALIZER_NONE);
 
@@ -58,6 +62,7 @@ class RedisQueueConnector implements ConnectorInterface
      * @return Redis
      * @throws RedisException
      */
+    #[\Override]
     public function getDriver(): Redis
     {
         if (empty($this->redis)) {
@@ -70,6 +75,7 @@ class RedisQueueConnector implements ConnectorInterface
     /**
      * @throws RedisException
      */
+    #[\Override]
     public function publish(Envelope $envelope): void
     {
         $properties = $envelope->getMessage()->getProperties();
@@ -86,6 +92,7 @@ class RedisQueueConnector implements ConnectorInterface
     /**
      * @throws RedisException
      */
+    #[\Override]
     public function consume(Pipe $pipe, Closure $onReceive, Closure $onError, ?string $identification = null): void
     {
         $pipe = clone $pipe;
@@ -97,6 +104,10 @@ class RedisQueueConnector implements ConnectorInterface
             // Loop stops and waits here until a job becomes available
             $message = $driver->brpop($pipe->getName(), 0);
 
+            if ($message === false || $message === null) {
+                continue;
+            }
+
             $envelope = new Envelope($pipe, new Message($message[1]));
 
             try {
@@ -105,8 +116,9 @@ class RedisQueueConnector implements ConnectorInterface
                 $result = $onError($envelope, $ex);
             }
 
-            if (($result & Message::NACK) == Message::NACK && $pipe->getDeadLetter() !== null) {
-                $dlqEnvelope = new Envelope($pipe->getDeadLetter(), new Message($envelope->getMessage()->getBody()));
+            $deadLetter = $pipe->getDeadLetter();
+            if (($result & Message::NACK) == Message::NACK && $deadLetter !== null) {
+                $dlqEnvelope = new Envelope($deadLetter, new Message($envelope->getMessage()->getBody()));
                 $this->publish($dlqEnvelope);
             }
 
