@@ -1,10 +1,4 @@
----
-tags: [php, queue]
----
-
 # Redis Queue Client
-
-A simple and efficient abstraction layer for publishing and consuming messages from Redis queues using the [byjg/message-queue-client](https://github.com/byjg/message-queue-client) framework.
 
 [![Sponsor](https://img.shields.io/badge/Sponsor-%23ea4aaa?logo=githubsponsors&logoColor=white&labelColor=0d1117)](https://github.com/sponsors/byjg)
 [![Build Status](https://github.com/byjg/php-redis-queue-client/actions/workflows/phpunit.yml/badge.svg?branch=main)](https://github.com/byjg/php-redis-queue-client/actions/workflows/phpunit.yml)
@@ -13,13 +7,15 @@ A simple and efficient abstraction layer for publishing and consuming messages f
 [![GitHub license](https://img.shields.io/github/license/byjg/php-redis-queue-client.svg)](https://opensource.byjg.com/opensource/licensing.html)
 [![GitHub release](https://img.shields.io/github/release/byjg/php-redis-queue-client.svg)](https://github.com/byjg/php-redis-queue-client/releases/)
 
+A simple and efficient abstraction layer for publishing and consuming messages from Redis queues using the [byjg/message-queue-client](https://github.com/byjg/message-queue-client) framework.
+
 ## Documentation
 
-- [Installation](installation)
-- [Connection](connection)
-- [Publishing Messages](publishing)
-- [Consuming Messages](consuming)
-- [Error Handling](error-handling)
+- [Installation](docs/installation.md)
+- [Connection](docs/connection.md)
+- [Publishing Messages](docs/publishing.md)
+- [Consuming Messages](docs/consuming.md)
+- [Error Handling](docs/error-handling.md)
 
 ## Usage
 
