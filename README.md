@@ -11,7 +11,7 @@ A simple and efficient abstraction layer for publishing and consuming messages f
 [![Build Status](https://github.com/byjg/php-redis-queue-client/actions/workflows/phpunit.yml/badge.svg?branch=main)](https://github.com/byjg/php-redis-queue-client/actions/workflows/phpunit.yml)
 [![Opensource ByJG](https://img.shields.io/badge/opensource-byjg-success.svg)](http://opensource.byjg.com)
 [![GitHub source](https://img.shields.io/badge/Github-source-informational?logo=github)](https://github.com/byjg/php-redis-queue-client/)
-[![GitHub license](https://img.shields.io/github/license/byjg/php-redis-queue-client.svg)](https://opensource.byjg.com/opensource/licensing.html)
+[![GitHub license](https://img.shields.io/github/license/byjg/php-redis-queue-client.svg)](https://opensource.byjg.com/license/)
 [![GitHub release](https://img.shields.io/github/release/byjg/php-redis-queue-client.svg)](https://github.com/byjg/php-redis-queue-client/releases/)
 
 ## Documentation
@@ -92,13 +92,6 @@ Possible return values from the callback function:
 | Protocol | URI Example                 | Notes               |
 |----------|-----------------------------|---------------------|
 | Redis    | redis://user:pass@host:port | Default port: 6379  |
-
-## Dependencies
-
-```mermaid
-flowchart TD
-    byjg/redis-queue-client --> byjg/message-queue-client
-```
 
 ----
 [Open source ByJG](http://opensource.byjg.com)
