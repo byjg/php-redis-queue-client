@@ -6,6 +6,11 @@
       "ByJG\\MessageQueueClient\\RedisQueue\\": "src/"
     }
   },
+  "autoload-dev": {
+    "psr-4": {
+      "Tests\\": "tests/"
+    }
+  },
   "prefer-stable": true,
   "minimum-stability": "dev",
   "require": {
@@ -15,14 +20,12 @@
     "byjg/message-queue-client": "^7.0"
   },
   "require-dev": {
-    "phpunit/phpunit": "^12.5"
+    "phpunit/phpunit": "^12.5",
+    "psalm/phar": "^6.16"
   },
   "scripts": {
     "test": "vendor/bin/phpunit",
-    "psalm": [
-      "@composer --working-dir=tools/psalm update --no-interaction",
-      "tools/psalm/vendor/bin/psalm --threads=1"
-    ]
+    "psalm": "vendor/bin/psalm.phar"
   },
   "license": "MIT"
 }

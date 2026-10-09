@@ -9,7 +9,8 @@ A simple and efficient abstraction layer for publishing and consuming messages f
 
 [![Sponsor](https://img.shields.io/badge/Sponsor-%23ea4aaa?logo=githubsponsors&logoColor=white&labelColor=0d1117)](https://github.com/sponsors/byjg)
 [![Build Status](https://github.com/byjg/php-redis-queue-client/actions/workflows/phpunit.yml/badge.svg?branch=main)](https://github.com/byjg/php-redis-queue-client/actions/workflows/phpunit.yml)
-[![Opensource ByJG](https://img.shields.io/badge/opensource-byjg-success.svg)](http://opensource.byjg.com)
+[![Opensource ByJG](https://img.shields.io/badge/opensource-byjg-success.svg)](https://opensource.byjg.com)
+[![Install MCP Server](https://img.shields.io/badge/Install-MCP_Server-8A2BE2?logo=modelcontextprotocol&logoColor=white)](https://opensource.byjg.com/docs/ai/mcpserver-byjg-docs/)
 [![GitHub source](https://img.shields.io/badge/Github-source-informational?logo=github)](https://github.com/byjg/php-redis-queue-client/)
 [![GitHub license](https://img.shields.io/github/license/byjg/php-redis-queue-client.svg)](https://opensource.byjg.com/license/)
 [![GitHub release](https://img.shields.io/github/release/byjg/php-redis-queue-client.svg)](https://github.com/byjg/php-redis-queue-client/releases/)
@@ -93,5 +94,12 @@ Possible return values from the callback function:
 |----------|-----------------------------|---------------------|
 | Redis    | redis://user:pass@host:port | Default port: 6379  |
 
+## Running Tests
+
+```bash
+docker compose up -d
+vendor/bin/phpunit
+```
+
 ----
-[Open source ByJG](http://opensource.byjg.com)
+[Open source ByJG](https://opensource.byjg.com)

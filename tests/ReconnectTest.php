@@ -1,5 +1,7 @@
 <?php
 
+namespace Tests;
+
 use ByJG\MessageQueueClient\Connector\Pipe;
 use ByJG\MessageQueueClient\RedisQueue\RedisQueueConnector;
 use PHPUnit\Framework\TestCase;
@@ -38,7 +40,7 @@ class ScriptedConnector extends RedisQueueConnector
         $outcome = array_shift($this->outcomes);
 
         if ($outcome === 'throw') {
-            throw new RedisException('connection lost');
+            throw new \RedisException('connection lost');
         }
 
         if ($outcome === 'false') {
