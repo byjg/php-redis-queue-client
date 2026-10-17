@@ -10,7 +10,7 @@ The consume method allows you to process messages from a Redis queue. It will co
 
 ```php
 <?php
-use ByJG\MessageQueueClient\ConnectorFactory;
+use ByJG\MessageQueueClient\Connector\ConnectorFactory;
 use ByJG\MessageQueueClient\Connector\Pipe;
 use ByJG\MessageQueueClient\Envelope;
 use ByJG\MessageQueueClient\Message;
@@ -85,7 +85,7 @@ Control message flow by returning one or more of these constants:
 
 - **`Message::ACK`** - Acknowledge and remove the message from the queue
 - **`Message::NACK`** - Not acknowledge the message. If a dead letter queue is configured, the message will be sent there
-- **`Message::REQUEUE`** - Put the message back into the queue for reprocessing
+- **`Message::REQUEUE`** - Publish the message again (at the back of the queue) for reprocessing
 - **`Message::EXIT`** - Stop consuming and exit the consume loop
 
 ### Combined Actions
@@ -182,6 +182,10 @@ The `consume()` method uses Redis `BRPOP` (blocking right pop):
 - The timeout is set to 0, meaning it waits forever for the next message
 - This is efficient as it doesn't poll the queue constantly
 - The loop continues until you return `Message::EXIT` or the process is terminated
+
+If the connection to Redis is lost while waiting, `consume()` does not throw. It drops the connection and
+reconnects, waiting between attempts with a backoff that starts at 200ms and doubles up to 30 seconds
+(randomised between half the delay and all of it). The backoff resets once a message is received.
 
 ## Identification Parameter
 

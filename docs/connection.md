@@ -10,7 +10,7 @@ Before using the Redis Queue Client, you need to register the connector with the
 
 ```php
 <?php
-use ByJG\MessageQueueClient\ConnectorFactory;
+use ByJG\MessageQueueClient\Connector\ConnectorFactory;
 use ByJG\MessageQueueClient\RedisQueue\RedisQueueConnector;
 
 ConnectorFactory::registerConnector(RedisQueueConnector::class);
@@ -22,7 +22,7 @@ Create a connector instance using a Redis URI:
 
 ```php
 <?php
-use ByJG\MessageQueueClient\ConnectorFactory;
+use ByJG\MessageQueueClient\Connector\ConnectorFactory;
 use ByJG\Util\Uri;
 
 $connector = ConnectorFactory::create(new Uri("redis://$user:$pass@$host:$port"));

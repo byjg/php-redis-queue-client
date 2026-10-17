@@ -15,6 +15,12 @@ A simple and efficient abstraction layer for publishing and consuming messages f
 [![GitHub license](https://img.shields.io/github/license/byjg/php-redis-queue-client.svg)](https://opensource.byjg.com/license/)
 [![GitHub release](https://img.shields.io/github/release/byjg/php-redis-queue-client.svg)](https://github.com/byjg/php-redis-queue-client/releases/)
 
+## Installation
+
+```bash
+composer require "byjg/redis-queue-client"
+```
+
 ## Documentation
 
 - [Installation](docs/installation.md)

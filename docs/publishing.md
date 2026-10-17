@@ -10,7 +10,7 @@ Publishing messages to a Redis queue involves creating a pipe (queue), a message
 
 ```php
 <?php
-use ByJG\MessageQueueClient\ConnectorFactory;
+use ByJG\MessageQueueClient\Connector\ConnectorFactory;
 use ByJG\MessageQueueClient\Connector\Pipe;
 use ByJG\MessageQueueClient\Message;
 use ByJG\MessageQueueClient\Envelope;
@@ -67,13 +67,8 @@ $message = new Message("Any text content here");
 
 ### Message Properties
 
-Messages support additional properties:
-
-```php
-$message = new Message("Hello");
-$properties = $message->getProperties();
-// Default content_type is 'text/plain'
-```
+The Redis connector stores only the message body. Properties set with `Message::withProperty()` are not
+sent to Redis, so the consumer does not receive them.
 
 ## Publishing Messages
 
@@ -89,5 +84,5 @@ $connector->publish($envelope);
 When you publish a message:
 1. The connector uses Redis `LPUSH` to add the message to the left side of the list
 2. The message body is stored as a plain string (no serialization)
-3. The content type defaults to `text/plain` if not specified
+3. Message properties are not stored
 4. Consumers will retrieve messages from the right side using `BRPOP`

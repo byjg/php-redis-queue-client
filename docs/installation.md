@@ -6,7 +6,7 @@ sidebar_position: 1
 
 ## Requirements
 
-- PHP 8.3 or higher (up to 8.5)
+- PHP 8.3 or higher (up to 8.6)
 - Redis PHP extension (`ext-redis`)
 - cURL PHP extension (`ext-curl`)
 

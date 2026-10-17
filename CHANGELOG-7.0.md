@@ -91,8 +91,7 @@ stuck against a permanently unreachable broker now stays alive rather than exiti
 - `ConnectorInterface` is unchanged; nothing written against 6.x needs modification.
 - The new `popBlocking()`, `awaitMessage()`, `disconnect()`, `delayWithJitter()` and `sleepMicros()`
   methods are `protected`, and exist as extension points for subclasses and tests.
-- The dependency on `byjg/message-queue-client` remains `^6.0` and moves to `^7.0` once that package
-  is released.
+- The dependency on `byjg/message-queue-client` is now `^7.0` (see [Requirements](#requirements)).
 
 ## Links
 
