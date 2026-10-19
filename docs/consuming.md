@@ -187,6 +187,9 @@ If the connection to Redis is lost while waiting, `consume()` does not throw. It
 reconnects, waiting between attempts with a backoff that starts at 200ms and doubles up to 30 seconds
 (randomised between half the delay and all of it). The backoff resets once a message is received.
 
+The publish done for `Message::NACK` (to the dead letter queue) and `Message::REQUEUE` is retried the
+same way if the connection is lost, so the message that was just received is not dropped.
+
 ## Identification Parameter
 
 The consume method accepts an optional `$identification` parameter (currently not used by Redis connector):

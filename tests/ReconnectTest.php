@@ -3,7 +3,10 @@
 namespace Tests;
 
 use ByJG\MessageQueueClient\Connector\Pipe;
+use ByJG\MessageQueueClient\Envelope;
+use ByJG\MessageQueueClient\Message;
 use ByJG\MessageQueueClient\RedisQueue\RedisQueueConnector;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -23,6 +26,12 @@ class ScriptedConnector extends RedisQueueConnector
 
     /** @var list<string> Queued outcomes, consumed one per pop: 'throw', 'false' or a payload. */
     public array $outcomes = [];
+
+    /** @var int How many of the next publishes fail with a lost connection. */
+    public int $failingPublishes = 0;
+
+    /** @var list<array{string, string}> Queue name and body of every publish that went through. */
+    public array $published = [];
 
     public function awaitMessagePublicly(Pipe $pipe): array
     {
@@ -48,6 +57,17 @@ class ScriptedConnector extends RedisQueueConnector
         }
 
         return [$pipe->getName(), $outcome];
+    }
+
+    #[\Override]
+    public function publish(Envelope $envelope): void
+    {
+        if ($this->failingPublishes > 0) {
+            $this->failingPublishes--;
+            throw new \RedisException('connection lost');
+        }
+
+        $this->published[] = [$envelope->getPipe()->getName(), $envelope->getMessage()->getBody()];
     }
 
     #[\Override]
@@ -187,5 +207,36 @@ class ReconnectTest extends TestCase
             $this->connector->sleeps[0],
             'The second outage must start again from the initial delay'
         );
+    }
+
+    public static function publishingResults(): array
+    {
+        return [
+            'NACK to the dead letter queue' => [Message::NACK, 'reconnect_dlq'],
+            'REQUEUE to the same queue' => [Message::REQUEUE, 'reconnect_test'],
+        ];
+    }
+
+    /**
+     * The message has already been popped when NACK or REQUEUE publishes it, so a RedisException
+     * there used to escape consume(), kill the consumer and lose the message. It must instead be
+     * retried with the same backoff as a lost connection while waiting.
+     */
+    #[DataProvider('publishingResults')]
+    public function testAFailedPublishAfterConsumingIsRetriedNotLost(int $result, string $expectedQueue): void
+    {
+        $this->pipe->withDeadLetter(new Pipe('reconnect_dlq'));
+        $this->connector->outcomes = ['payload'];
+        $this->connector->failingPublishes = 2;
+
+        $this->connector->consume(
+            $this->pipe,
+            fn(Envelope $envelope) => $result | Message::EXIT,
+            fn(Envelope $envelope, $ex) => throw $ex
+        );
+
+        $this->assertSame([[$expectedQueue, 'payload']], $this->connector->published);
+        $this->assertCount(2, $this->connector->sleeps, 'Every failed publish must pause before retrying');
+        $this->assertSame(2, $this->connector->disconnects, 'Every failed publish must drop the connection');
     }
 }

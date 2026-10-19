@@ -16,6 +16,7 @@ Part of the coordinated move of the byjg PHP components to 7.0.
 | Area | Before (6.x) | After (7.0) | Description |
 |------|--------------|-------------|-------------|
 | **Lost connections** | `RedisException` escaped `consume()` | caught, and retried indefinitely | A consumer no longer exits when Redis goes away. If you relied on that exception to end the process and have a supervisor restart it, the consumer now rides the outage out instead. |
+| **NACK / REQUEUE publish** | `RedisException` escaped `consume()` | caught, and retried indefinitely | The publish to the dead letter queue or back to the queue is retried with the same backoff instead of ending the consumer. |
 
 ## Bug Fixes
 
@@ -49,6 +50,21 @@ Both outcomes are now treated as the same event — the broker is gone — and h
 connection, pausing, and retrying. The driver is re-resolved on every attempt so a reconnection
 actually takes effect.
 
+### A failed NACK or REQUEUE publish lost the message
+
+After the callback returned `Message::NACK` (with a dead letter queue) or `Message::REQUEUE`,
+`consume()` published the message with a plain `publish()`. The message had already been popped by
+`brpop`, so a `RedisException` there escaped `consume()`, killed the consumer and dropped the
+message. That publish is now retried with the same backoff as a lost connection while waiting, and
+the message is kept in memory until it goes through. A process that dies before then still loses it;
+Redis lists have no acknowledgement.
+
+### Username and password were passed to `AUTH` in the wrong order
+
+For a URI with both a username and a password, the connector called `auth([$password, $username])`.
+phpredis expects `[$user, $pass]`, so every ACL login failed with `WRONGPASS`. The order is fixed;
+a password without a username is still sent as `[$password]`, which authenticates the `default` user.
+
 ### The retry pause
 
 Reconnection backs off from 200ms, doubling to a ceiling of 30 seconds, and resets after each
@@ -66,6 +82,11 @@ prevent.
 live broker: a `false` reply, a thrown `RedisException`, and long outages. It asserts that every
 failed pop pauses and drops its connection, that the backoff grows and stays capped, that a jittered
 pause is never zero, and that the backoff resets after a successful message.
+It also drives `consume()` through a NACK and a REQUEUE whose publish fails, and asserts the message
+is published once Redis is back rather than lost.
+
+`tests/RedisQueueConnectorTest.php` creates an ACL user on the test Redis and asserts that a
+`redis://user:pass@host` URI authenticates as that user.
 
 A `popBlocking()` seam was added so those tests script pop outcomes without faking phpredis or
 needing a live Redis, and sleeps are recorded rather than taken — so a 30 second ceiling is
@@ -89,8 +110,8 @@ stuck against a permanently unreachable broker now stays alive rather than exiti
 ## Notes
 
 - `ConnectorInterface` is unchanged; nothing written against 6.x needs modification.
-- The new `popBlocking()`, `awaitMessage()`, `disconnect()`, `delayWithJitter()` and `sleepMicros()`
-  methods are `protected`, and exist as extension points for subclasses and tests.
+- The new `popBlocking()`, `awaitMessage()`, `retryOnConnectionLoss()`, `disconnect()`,
+  `delayWithJitter()` and `sleepMicros()` methods are `protected`, and exist as extension points for subclasses and tests.
 - The dependency on `byjg/message-queue-client` is now `^7.0` (see [Requirements](#requirements)).
 
 ## Links

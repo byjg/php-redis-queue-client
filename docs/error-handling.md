@@ -261,9 +261,12 @@ While `consume()` is waiting for a message, a lost connection is handled by the 
 with a backoff (see [Blocking Behavior](consuming.md#blocking-behavior)) and keeps waiting, without
 throwing.
 
-`publish()` still throws `RedisException` when Redis is unreachable. Inside `consume()` this also applies
-to the publish done for `Message::NACK` (to the dead letter queue) and `Message::REQUEUE`, and that
-exception escapes `consume()`:
+The same applies to the publish `consume()` does for `Message::NACK` (to the dead letter queue) and
+`Message::REQUEUE`: the message has already been taken off the queue, so instead of throwing and losing
+it, the publish is retried with the same backoff until Redis is back. If the process itself dies before
+that publish succeeds, the message is still lost.
+
+A direct call to `publish()` still throws `RedisException` when Redis is unreachable:
 
 ```php
 use RedisException;

@@ -16,6 +16,8 @@ class RedisQueueConnectorTest extends TestCase
     /** @var ConnectorInterface */
     protected $connector;
 
+    protected string $host;
+
     #[\Override]
     public function setUp(): void
     {
@@ -23,8 +25,27 @@ class RedisQueueConnectorTest extends TestCase
         if (empty($host)) {
             $host = "127.0.0.1";
         }
+        $this->host = $host;
         ConnectorFactory::registerConnector(RedisQueueConnector::class);
         $this->connector = ConnectorFactory::create("redis://$host");
+    }
+
+    /**
+     * phpredis expects [user, pass] for an ACL login. The credentials used to be passed as
+     * [pass, user], so a URI with both a username and a password failed with WRONGPASS.
+     */
+    public function testAuthenticatesWithAclUsernameAndPassword(): void
+    {
+        $admin = $this->connector->getDriver();
+        $admin->rawCommand('ACL', 'SETUSER', 'acl_test_user', 'on', '>acl_test_pass', '~*', '+@all');
+
+        try {
+            $connector = ConnectorFactory::create("redis://acl_test_user:acl_test_pass@{$this->host}");
+
+            $this->assertSame('acl_test_user', $connector->getDriver()->rawCommand('ACL', 'WHOAMI'));
+        } finally {
+            $admin->rawCommand('ACL', 'DELUSER', 'acl_test_user');
+        }
     }
 
     public function testClearQueues(): void

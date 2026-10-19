@@ -50,10 +50,11 @@ class RedisQueueConnector implements ConnectorInterface
 
         $password = $this->uri->getPassword();
         if ($password !== null && $password !== '') {
+            // phpredis takes [user, pass] for an ACL login and [pass] for the default user.
             $username = $this->uri->getUsername();
             $authCredentials = [$password];
             if ($username !== null && $username !== '') {
-                $authCredentials[] = $username;
+                $authCredentials = [$username, $password];
             }
             $this->redis->auth($authCredentials);
         }
@@ -116,14 +117,16 @@ class RedisQueueConnector implements ConnectorInterface
                 $result = $onError($envelope, $ex);
             }
 
+            // The message is already off the list, so a failed publish is retried rather than
+            // dropping it along with the consumer.
             $deadLetter = $pipe->getDeadLetter();
             if (($result & Message::NACK) == Message::NACK && $deadLetter !== null) {
                 $dlqEnvelope = new Envelope($deadLetter, new Message($envelope->getMessage()->getBody()));
-                $this->publish($dlqEnvelope);
+                $this->retryOnConnectionLoss(fn() => $this->publish($dlqEnvelope));
             }
 
             if (($result & Message::REQUEUE) == Message::REQUEUE) {
-                $this->publish($envelope);
+                $this->retryOnConnectionLoss(fn() => $this->publish($envelope));
             }
 
             if (($result & Message::EXIT) == Message::EXIT) {
@@ -148,17 +151,35 @@ class RedisQueueConnector implements ConnectorInterface
      */
     protected function awaitMessage(Pipe $pipe): array
     {
+        /** @var array */
+        return $this->retryOnConnectionLoss(function () use ($pipe): array {
+            $message = $this->popBlocking($pipe);
+
+            if (is_array($message) && array_key_exists(1, $message)) {
+                return $message;
+            }
+
+            // Same cause as a thrown exception: the connection is gone.
+            throw new RedisException('brpop returned no message');
+        });
+    }
+
+    /**
+     * Run an operation until it completes, treating a `RedisException` as a lost connection:
+     * drop the connection, pause with a growing backoff, and try again. The backoff starts over on
+     * every call, so it resets after each success.
+     *
+     * @throws Exception|Error Anything the operation throws other than a RedisException.
+     */
+    protected function retryOnConnectionLoss(Closure $operation): mixed
+    {
         $delayMicros = static::RECONNECT_INITIAL_DELAY_MICROS;
 
         while (true) {
             try {
-                $message = $this->popBlocking($pipe);
-
-                if (is_array($message) && array_key_exists(1, $message)) {
-                    return $message;
-                }
+                return $operation();
             } catch (RedisException) {
-                // Same cause as a false return; handled by the backoff below.
+                // Handled by the backoff below.
             }
 
             $this->disconnect();
