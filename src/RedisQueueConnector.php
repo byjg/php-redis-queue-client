@@ -97,19 +97,27 @@ class RedisQueueConnector implements ConnectorInterface
     }
 
     /**
+     * Messages are taken with BLMOVE into a processing list and removed from it only once their
+     * outcome (ACK, NACK to the dead letter queue, REQUEUE) is done. A consumer that dies in between
+     * leaves the message there, and the next consume() on the same processing list puts it back on
+     * the queue. Delivery is therefore at-least-once: after a crash a message can be processed twice.
+     *
      * @throws RedisException
      */
     #[\Override]
     public function consume(Pipe $pipe, Closure $onReceive, Closure $onError, ?string $identification = null): void
     {
         $pipe = clone $pipe;
+        $processing = $this->processingListName($pipe, $identification);
+
+        $this->retryOnConnectionLoss(fn() => $this->recoverProcessing($pipe, $processing));
 
         while (true) {
 
             // Loop stops and waits here until a job becomes available
-            $message = $this->awaitMessage($pipe);
+            $body = $this->awaitMessage($pipe, $processing);
 
-            $envelope = new Envelope($pipe, new Message($message[1]));
+            $envelope = new Envelope($pipe, new Message($body));
 
             try {
                 $result = $onReceive($envelope);
@@ -117,8 +125,7 @@ class RedisQueueConnector implements ConnectorInterface
                 $result = $onError($envelope, $ex);
             }
 
-            // The message is already off the list, so a failed publish is retried rather than
-            // dropping it along with the consumer.
+            // A failed publish is retried rather than dropping the message along with the consumer.
             $deadLetter = $pipe->getDeadLetter();
             if (($result & Message::NACK) == Message::NACK && $deadLetter !== null) {
                 $dlqEnvelope = new Envelope($deadLetter, new Message($envelope->getMessage()->getBody()));
@@ -129,6 +136,9 @@ class RedisQueueConnector implements ConnectorInterface
                 $this->retryOnConnectionLoss(fn() => $this->publish($envelope));
             }
 
+            // Only now is the outcome safe, so only now does the message leave the processing list.
+            $this->retryOnConnectionLoss(fn() => $this->removeFromProcessing($processing, $body));
+
             if (($result & Message::EXIT) == Message::EXIT) {
                 break;
             }
@@ -136,31 +146,69 @@ class RedisQueueConnector implements ConnectorInterface
     }
 
     /**
+     * The list holding the messages this consumer has taken but not finished. Without an
+     * identification every consumer of the queue shares `<queue>:processing`; with one, each
+     * consumer gets its own `<queue>:processing:<identification>`.
+     */
+    protected function processingListName(Pipe $pipe, ?string $identification): string
+    {
+        $name = $pipe->getName() . ':processing';
+        if ($identification !== null && $identification !== '') {
+            $name .= ':' . $identification;
+        }
+
+        return $name;
+    }
+
+    /**
+     * Put back on the queue whatever a previous consumer left in the processing list. Each element
+     * moves with one atomic LMOVE, so a crash here loses nothing. They go to the end the queue is
+     * read from, so they are the next ones delivered, in their original order.
+     *
+     * @throws RedisException
+     */
+    protected function recoverProcessing(Pipe $pipe, string $processing): void
+    {
+        $driver = $this->getDriver();
+        while ($driver->lmove($processing, $pipe->getName(), 'LEFT', 'RIGHT') !== false) {
+            // Keep moving until the processing list is empty.
+        }
+    }
+
+    /**
+     * @throws RedisException
+     */
+    protected function removeFromProcessing(string $processing, string $body): void
+    {
+        $this->getDriver()->lrem($processing, $body, 1);
+    }
+
+    /**
      * Block until a message arrives, surviving the broker going away.
      *
-     * `brpop` is called with a timeout of 0, so it blocks indefinitely and never returns "nothing
+     * `blmove` is called with a timeout of 0, so it blocks indefinitely and never returns "nothing
      * yet". Anything other than a message therefore means the connection is gone — either as a
      * `false` return or as a thrown `RedisException`, depending on how the failure surfaces.
      *
-     * Both used to end badly. The `false` branch looped straight back into `brpop` on the same dead
+     * Both used to end badly. The `false` branch looped straight back into the pop on the same dead
      * connection, spinning at full CPU for as long as the broker was down; the exception escaped
      * `consume()` and killed the consumer outright. Neither reconnected, because the driver was
      * fetched once before the loop and never refreshed.
      *
-     * @return array The raw brpop reply: element 0 is the queue name, element 1 the payload.
+     * @return string The message body, now also held in the processing list.
      */
-    protected function awaitMessage(Pipe $pipe): array
+    protected function awaitMessage(Pipe $pipe, string $processing): string
     {
-        /** @var array */
-        return $this->retryOnConnectionLoss(function () use ($pipe): array {
-            $message = $this->popBlocking($pipe);
+        /** @var string */
+        return $this->retryOnConnectionLoss(function () use ($pipe, $processing): string {
+            $message = $this->popBlocking($pipe, $processing);
 
-            if (is_array($message) && array_key_exists(1, $message)) {
+            if (is_string($message)) {
                 return $message;
             }
 
             // Same cause as a thrown exception: the connection is gone.
-            throw new RedisException('brpop returned no message');
+            throw new RedisException('blmove returned no message');
         });
     }
 
@@ -190,15 +238,16 @@ class RedisQueueConnector implements ConnectorInterface
     }
 
     /**
-     * The blocking pop itself. The driver is re-resolved on every call, so a reconnection
+     * The blocking pop itself: atomically moves the oldest message of the queue into the processing
+     * list (BLMOVE, Redis >= 6.2). The driver is re-resolved on every call, so a reconnection
      * performed by the caller actually takes effect rather than reusing a dead handle.
      *
-     * @return mixed The raw brpop reply: an array on success, false or an exception otherwise.
+     * @return mixed The raw blmove reply: the message body on success, false or an exception otherwise.
      * @throws RedisException
      */
-    protected function popBlocking(Pipe $pipe): mixed
+    protected function popBlocking(Pipe $pipe, string $processing): mixed
     {
-        return $this->getDriver()->brpop($pipe->getName(), 0);
+        return $this->getDriver()->blmove($pipe->getName(), $processing, 'RIGHT', 'LEFT', 0);
     }
 
     /**

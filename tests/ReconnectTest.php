@@ -15,7 +15,10 @@ use PHPUnit\Framework\TestCase;
  *
  * The seam is `popBlocking()` rather than the Redis object, so no part of phpredis is faked - what
  * is under test is how the loop reacts to a failed pop, not how phpredis reports one. Sleeps are
- * recorded instead of taken, so a 30-second backoff ceiling is verifiable in microseconds.
+ * recorded instead of taken, so a 30-second backoff ceiling is verifiable in microseconds. The
+ * processing-list steps (`recoverProcessing()`, `removeFromProcessing()`) are recorded in `$calls`
+ * so their order relative to the publish can be asserted; they run against Redis in
+ * RedisQueueConnectorTest.
  */
 class ScriptedConnector extends RedisQueueConnector
 {
@@ -33,9 +36,12 @@ class ScriptedConnector extends RedisQueueConnector
     /** @var list<array{string, string}> Queue name and body of every publish that went through. */
     public array $published = [];
 
-    public function awaitMessagePublicly(Pipe $pipe): array
+    /** @var list<string> Every step of consume() that touches Redis, in order. */
+    public array $calls = [];
+
+    public function awaitMessagePublicly(Pipe $pipe): string
     {
-        return $this->awaitMessage($pipe);
+        return $this->awaitMessage($pipe, $pipe->getName() . ':processing');
     }
 
     public function jitterPublicly(int $delayMicros): int
@@ -44,7 +50,7 @@ class ScriptedConnector extends RedisQueueConnector
     }
 
     #[\Override]
-    protected function popBlocking(Pipe $pipe): mixed
+    protected function popBlocking(Pipe $pipe, string $processing): mixed
     {
         $outcome = array_shift($this->outcomes);
 
@@ -56,7 +62,21 @@ class ScriptedConnector extends RedisQueueConnector
             return false;
         }
 
-        return [$pipe->getName(), $outcome];
+        $this->calls[] = "take $outcome into $processing";
+
+        return $outcome;
+    }
+
+    #[\Override]
+    protected function recoverProcessing(Pipe $pipe, string $processing): void
+    {
+        $this->calls[] = "recover $processing";
+    }
+
+    #[\Override]
+    protected function removeFromProcessing(string $processing, string $body): void
+    {
+        $this->calls[] = "remove $body from $processing";
     }
 
     #[\Override]
@@ -68,6 +88,7 @@ class ScriptedConnector extends RedisQueueConnector
         }
 
         $this->published[] = [$envelope->getPipe()->getName(), $envelope->getMessage()->getBody()];
+        $this->calls[] = "publish {$envelope->getMessage()->getBody()} to {$envelope->getPipe()->getName()}";
     }
 
     #[\Override]
@@ -101,13 +122,13 @@ class ReconnectTest extends TestCase
 
         $message = $this->connector->awaitMessagePublicly($this->pipe);
 
-        $this->assertSame(['reconnect_test', 'payload'], $message);
+        $this->assertSame('payload', $message);
         $this->assertSame([], $this->connector->sleeps, 'A healthy pop must not pause at all');
         $this->assertSame(0, $this->connector->disconnects);
     }
 
     /**
-     * The regression this change exists for. brpop is called with a timeout of 0, so it blocks
+     * The regression this change exists for. The pop is called with a timeout of 0, so it blocks
      * indefinitely and never reports "no message yet" - a false reply means the connection died.
      * The old loop went straight back into brpop on that same dead handle, spinning at full CPU for
      * as long as the broker stayed down.
@@ -118,7 +139,7 @@ class ReconnectTest extends TestCase
 
         $message = $this->connector->awaitMessagePublicly($this->pipe);
 
-        $this->assertSame('payload', $message[1]);
+        $this->assertSame('payload', $message);
         $this->assertCount(2, $this->connector->sleeps, 'Every failed pop must pause before retrying');
         $this->assertSame(2, $this->connector->disconnects, 'Every failed pop must drop the dead connection');
     }
@@ -133,7 +154,7 @@ class ReconnectTest extends TestCase
 
         $message = $this->connector->awaitMessagePublicly($this->pipe);
 
-        $this->assertSame('payload', $message[1]);
+        $this->assertSame('payload', $message);
         $this->assertCount(3, $this->connector->sleeps);
         $this->assertSame(3, $this->connector->disconnects);
     }
@@ -238,5 +259,15 @@ class ReconnectTest extends TestCase
         $this->assertSame([[$expectedQueue, 'payload']], $this->connector->published);
         $this->assertCount(2, $this->connector->sleeps, 'Every failed publish must pause before retrying');
         $this->assertSame(2, $this->connector->disconnects, 'Every failed publish must drop the connection');
+        $this->assertSame(
+            [
+                'recover reconnect_test:processing',
+                'take payload into reconnect_test:processing',
+                "publish payload to $expectedQueue",
+                'remove payload from reconnect_test:processing',
+            ],
+            $this->connector->calls,
+            'The message may only leave the processing list after its publish went through'
+        );
     }
 }

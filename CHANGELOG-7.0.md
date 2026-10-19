@@ -7,7 +7,9 @@
 
 Version 7.0 fixes a consumer that could neither survive nor recover from the broker going away. A
 lost Redis connection either pinned a CPU core at roughly 1.6 million iterations per second or
-killed the consumer outright, and in neither case did it ever reconnect.
+killed the consumer outright, and in neither case did it ever reconnect. It also stops losing the
+message a consumer was handling when that consumer dies: messages are kept in a processing list until
+their outcome is done (at-least-once delivery, Redis 6.2 or later).
 
 Part of the coordinated move of the byjg PHP components to 7.0.
 
@@ -17,8 +19,34 @@ Part of the coordinated move of the byjg PHP components to 7.0.
 |------|--------------|-------------|-------------|
 | **Lost connections** | `RedisException` escaped `consume()` | caught, and retried indefinitely | A consumer no longer exits when Redis goes away. If you relied on that exception to end the process and have a supervisor restart it, the consumer now rides the outage out instead. |
 | **NACK / REQUEUE publish** | `RedisException` escaped `consume()` | caught, and retried indefinitely | The publish to the dead letter queue or back to the queue is retried with the same backoff instead of ending the consumer. |
+| **Redis server version** | any (`BRPOP`) | 6.2 or later (`BLMOVE`, `LMOVE`) | `consume()` takes messages with `BLMOVE`. `ext-redis` 6.0 or later is needed for `blmove`/`lmove`. |
+| **New keys** | only the queue | `<queue>:processing` or `<queue>:processing:<identification>` | In-flight messages live in a processing list next to the queue. Account for these keys in key-space monitoring, ACL key patterns and cleanup scripts. |
+| **Delivery guarantee** | at-most-once (a crash lost the message) | at-least-once | A consumer that dies mid-processing no longer loses the message, but it can be delivered again after recovery. Handlers should be idempotent. |
+| **`$identification`** | ignored | names the processing list | When it is set, the consumer uses its own processing list. Consumers of the same queue that do not set it share `<queue>:processing`, and each one that starts puts the in-flight messages of the others back on the queue (see Migration). |
+| **Start of `consume()`** | waits for a message | first moves its processing list back to the queue | Messages left by a dead consumer are delivered again before new ones. |
 
 ## Bug Fixes
+
+### A consumer that died mid-processing lost the message
+
+`consume()` took the message with `BRPOP`, which removes it from Redis. From then until the callback
+finished and the NACK/REQUEUE publish went through, the message existed only in the consumer's
+memory: a killed, crashed or out-of-memory process lost it.
+
+Messages are now taken with `BLMOVE`, which atomically moves them into a processing list
+(`<queue>:processing`, or `<queue>:processing:<identification>` when `consume()` is given an
+identification). The message is removed from it with `LREM` only after the outcome is done: ACK
+right away, NACK after the publish to the dead letter queue, REQUEUE after the publish back to the
+queue (both publishes keep their retry with backoff). When `consume()` starts, it moves whatever is
+left in its processing list back to the queue with one atomic `LMOVE` per message, so those messages
+are delivered next, in their original order.
+
+Recovery runs at start and covers the whole processing list of that consumer, which is why the list
+is per identification: a consumer that starts must not take the in-flight messages of another one
+still running. A processing list whose consumer never returns under the same identification is not
+recovered automatically; see [Reliable Delivery](docs/consuming.md#reliable-delivery).
+
+`BLMOVE` was chosen over `BRPOPLPUSH`, which does the same thing but is deprecated since Redis 6.2.
 
 ### A lost connection spun the CPU or killed the consumer
 
@@ -56,8 +84,8 @@ After the callback returned `Message::NACK` (with a dead letter queue) or `Messa
 `consume()` published the message with a plain `publish()`. The message had already been popped by
 `brpop`, so a `RedisException` there escaped `consume()`, killed the consumer and dropped the
 message. That publish is now retried with the same backoff as a lost connection while waiting, and
-the message is kept in memory until it goes through. A process that dies before then still loses it;
-Redis lists have no acknowledgement.
+the message is kept in memory until it goes through. A process that dies before then no longer loses
+it either: it stays in the processing list (see above).
 
 ### Username and password were passed to `AUTH` in the wrong order
 
@@ -88,6 +116,13 @@ is published once Redis is back rather than lost.
 `tests/RedisQueueConnectorTest.php` creates an ACL user on the test Redis and asserts that a
 `redis://user:pass@host` URI authenticates as that user.
 
+Against the test Redis it also asserts that a message is in the processing list (and not in the
+queue) while the callback runs; that ACK, NACK and REQUEUE all leave the processing list empty; that
+a message survives a consumer that dies mid-processing and is delivered by the next consumer; that
+recovery puts leftovers back ahead of newer messages in their original order; and that a consumer
+with an identification recovers only its own processing list. `ReconnectTest` asserts that the
+message leaves the processing list only after a NACK/REQUEUE publish that failed has gone through.
+
 A `popBlocking()` seam was added so those tests script pop outcomes without faking phpredis or
 needing a live Redis, and sleeps are recorded rather than taken — so a 30 second ceiling is
 verifiable in microseconds.
@@ -107,11 +142,25 @@ If a supervisor was restarting consumers that died on `RedisException`, that no 
 consumer waits and reconnects on its own. This is usually what you want, but it does mean a consumer
 stuck against a permanently unreachable broker now stays alive rather than exiting.
 
+### Step 3: Several consumers on one queue? Give each a stable identification
+
+If more than one process consumes the same queue, pass each a distinct identification that stays the
+same across restarts (`consume($pipe, $onReceive, $onError, "worker-1")`). Without it they share
+`<queue>:processing`, and every consumer that starts re-delivers the messages the others are
+processing at that moment.
+
+### Step 4: Make handlers idempotent
+
+Delivery is at-least-once: after a crash a message can be processed again.
+
 ## Notes
 
-- `ConnectorInterface` is unchanged; nothing written against 6.x needs modification.
+- `ConnectorInterface` is unchanged; code written against 6.x compiles as is. What changes is
+  behaviour: the Redis version, the processing-list keys, at-least-once delivery and the meaning of
+  `$identification` (see [Breaking Changes](#breaking-changes) and the migration steps).
 - The new `popBlocking()`, `awaitMessage()`, `retryOnConnectionLoss()`, `disconnect()`,
-  `delayWithJitter()` and `sleepMicros()` methods are `protected`, and exist as extension points for subclasses and tests.
+  `delayWithJitter()`, `sleepMicros()`, `processingListName()`, `recoverProcessing()` and
+  `removeFromProcessing()` methods are `protected`, and exist as extension points for subclasses and tests.
 - The dependency on `byjg/message-queue-client` is now `^7.0` (see [Requirements](#requirements)).
 
 ## Links
@@ -123,6 +172,7 @@ stuck against a permanently unreachable broker now stays alive rather than exiti
 
 - PHP 8.3, 8.4, 8.5 and 8.6 are now supported: `"php": ">=8.3 <8.7"`.
   The previous `<8.6` upper bound excluded PHP 8.6, since `<8.6` is exclusive.
+- Redis server 6.2 or later, and `ext-redis` 6.0 or later (for `BLMOVE`/`LMOVE`).
 
 ### ByJG dependencies
 

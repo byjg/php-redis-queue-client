@@ -262,9 +262,13 @@ with a backoff (see [Blocking Behavior](consuming.md#blocking-behavior)) and kee
 throwing.
 
 The same applies to the publish `consume()` does for `Message::NACK` (to the dead letter queue) and
-`Message::REQUEUE`: the message has already been taken off the queue, so instead of throwing and losing
-it, the publish is retried with the same backoff until Redis is back. If the process itself dies before
-that publish succeeds, the message is still lost.
+`Message::REQUEUE`, and to removing the message from the processing list afterwards: instead of
+throwing, they are retried with the same backoff until Redis is back.
+
+If the process itself dies (killed, crash, out of memory) at any point before that, the message is not
+lost: it is still in the processing list, and the next `consume()` puts it back on the queue. It can
+therefore be processed twice (at-least-once delivery). See
+[Reliable Delivery](consuming.md#reliable-delivery).
 
 A direct call to `publish()` still throws `RedisException` when Redis is unreachable:
 

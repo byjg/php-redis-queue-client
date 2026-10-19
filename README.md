@@ -94,6 +94,12 @@ Possible return values from the callback function:
 * `Message::REQUEUE` - Requeue the message
 * `Message::EXIT` - Exit the consume method
 
+Messages are taken with `BLMOVE` into a processing list (`<queue>:processing`) and removed from it only
+after the outcome is done, so a consumer that dies mid-processing does not lose the message: the next
+`consume()` puts it back on the queue. Delivery is at-least-once, and Redis 6.2 or later is required.
+When several consumers read the same queue, give each one a stable identification
+(`consume($pipe, $onReceive, $onError, "worker-1")`). See [Reliable Delivery](docs/consuming.md#reliable-delivery).
+
 ## Protocols
 
 | Protocol | URI Example                 | Notes               |
