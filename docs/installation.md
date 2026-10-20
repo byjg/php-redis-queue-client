@@ -6,8 +6,9 @@ sidebar_position: 1
 
 ## Requirements
 
-- PHP 8.3 or higher (up to 8.5)
-- Redis PHP extension (`ext-redis`)
+- PHP 8.3 or higher (up to 8.6)
+- Redis PHP extension (`ext-redis`) 6.0 or later, which provides `blmove`/`lmove`
+- Redis server 6.2 or later (`consume()` uses `BLMOVE` and `LMOVE`)
 - cURL PHP extension (`ext-curl`)
 
 ## Installing via Composer

@@ -130,7 +130,7 @@ $dlqPipe = new Pipe("dlq_orders");
 
 $connector->consume(
     $dlqPipe,
-    function (Envelope $envelope) {
+    function (Envelope $envelope) use ($connector) {
         $body = $envelope->getMessage()->getBody();
 
         // Log or store for manual review
@@ -160,7 +160,7 @@ The error callback receives any `Exception` or `Error` thrown during message pro
 ```php
 function (Envelope $envelope, Exception|Error $ex) {
     // Handle different error types
-    if ($ex instanceof \Redis\Exception) {
+    if ($ex instanceof \RedisException) {
         // Redis connection issue
         return Message::REQUEUE;
     }
@@ -257,19 +257,27 @@ if ($dlqSize > 100) {
 
 ## Redis Connection Errors
 
-Connection errors to Redis will throw `RedisException`:
+While `consume()` is waiting for a message, a lost connection is handled by the connector: it reconnects
+with a backoff (see [Blocking Behavior](consuming.md#blocking-behavior)) and keeps waiting, without
+throwing.
+
+The same applies to the publish `consume()` does for `Message::NACK` (to the dead letter queue) and
+`Message::REQUEUE`, and to removing the message from the processing list afterwards: instead of
+throwing, they are retried with the same backoff until Redis is back.
+
+If the process itself dies (killed, crash, out of memory) at any point before that, the message is not
+lost: it is still in the processing list, and the next `consume()` puts it back on the queue. It can
+therefore be processed twice (at-least-once delivery). See
+[Reliable Delivery](consuming.md#reliable-delivery).
+
+A direct call to `publish()` still throws `RedisException` when Redis is unreachable:
 
 ```php
 use RedisException;
 
 try {
-    $connector->consume($pipe, $onReceive, $onError);
+    $connector->publish($envelope);
 } catch (RedisException $ex) {
-    // Redis connection lost
     error_log("Redis connection error: " . $ex->getMessage());
-
-    // Implement reconnection logic
-    sleep(5);
-    // retry...
 }
 ```
