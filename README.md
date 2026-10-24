@@ -15,6 +15,14 @@ A simple and efficient abstraction layer for publishing and consuming messages f
 [![GitHub license](https://img.shields.io/github/license/byjg/php-redis-queue-client.svg)](https://opensource.byjg.com/license/)
 [![GitHub release](https://img.shields.io/github/release/byjg/php-redis-queue-client.svg)](https://github.com/byjg/php-redis-queue-client/releases/)
 
+## Why
+
+This is the Redis connector of [byjg/message-queue-client](https://github.com/byjg/php-message-queue-client).
+Your code publishes and consumes through the same `ConnectorInterface` whatever the
+broker, so it does not depend on Redis: switching to another broker, or to the
+in-memory `MockConnector` in tests, means a different connection URI (`redis://…` →
+`amqp://…` or `mock://…`), not a rewrite.
+
 ## Installation
 
 ```bash
